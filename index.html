@@ -1,190 +1,270 @@
 <!DOCTYPE html>
 <html lang="tr">
 <head>
-    <meta charset="UTF-8">
+    <meta charset="UTF-8">a
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>TTP Şablon Oluşturucu & PDF Çıktı Aracı</title>
+    <title>PDÖ PDF Şablon Motoru</title>
+    <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
+    <!-- html2pdf.js -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+    <!-- Google Fonts -->
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+    
     <style>
         body {
             font-family: 'Inter', sans-serif;
             background-color: #f3f4f6;
             margin: 0;
-            overflow-x: hidden;
+            -webkit-font-smoothing: antialiased;
         }
 
-        /* A4 Sayfa Tasarımı (Ekranda görünüm ve PDF için) */
-        .a4-container {
-            display: flex;
-            flex-direction: column;
-            gap: 20px;
-            align-items: center;
-            padding: 20px;
-            overflow-y: auto;
-            max-height: 100vh;
+        /* 
+         * PDF Şablonu İçin A4 Stilleri 
+         */
+        #pdf-template-wrapper {
+            display: none; /* Normalde tamamen kapalı, sadece buton basılınca açılır */
+        }
+
+        /* 
+         * Kırpılma (Clipping) Hatası Çözümü:
+         * PDF oluşturulurken wrapper tam ekranın sol üstüne alınır ve tam görünür yapılır.
+         * Kullanıcının bunu görmemesini z-index'i yüksek olan tam mat SİYAH Loader ekranı ile sağlıyoruz.
+         */
+        body.generating-pdf #pdf-template-wrapper {
+            display: block;
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 210mm; /* A4 genişliği sabitlenir */
+            z-index: 10;
+            background: #e5e7eb; /* Hata payı arka planı */
         }
 
         .page {
             width: 210mm;
             height: 297mm;
             background: white;
-            box-shadow: 0 10px 25px rgba(0,0,0,0.15);
-            padding: 15mm 15mm;
+            padding: 10mm 15mm; /* İç boşluklar milimetrik ayarlandı */
             box-sizing: border-box;
             position: relative;
-            flex-shrink: 0;
-            font-size: 11pt;
-            line-height: 1.4;
+            font-size: 9.5pt; /* Taşmayı önlemek için 10pt -> 9.5pt yapıldı */
+            line-height: 1.35;
             color: #000;
+            overflow: hidden; /* Dışarı taşan ufak pikselleri gizler */
         }
 
-        /* Şablon İçin Özel Stiller */
-        .doc-title { font-size: 18pt; font-weight: bold; text-align: center; margin-bottom: 5px; color: #000; }
-        .doc-subtitle { font-size: 12pt; text-align: center; font-weight: 600; color: #1e3a8a; margin-bottom: 15px; border-bottom: 2px solid #1e3a8a; padding-bottom: 10px; }
-        .section-title { font-size: 12pt; font-weight: bold; background-color: #e5e7eb; padding: 5px 10px; margin-top: 15px; margin-bottom: 10px; text-transform: uppercase; color: #1e3a8a;}
+        /* Sola dayalı başlıklar */
+        .doc-title { 
+            font-size: 16pt; 
+            font-weight: bold; 
+            text-align: left; 
+            margin-bottom: 2px; 
+            color: #000; 
+        }
         
-        .arrow-down { text-align: center; margin: 5px 0; font-weight: bold; font-size: 16pt; color: #1e3a8a; }
+        .doc-subtitle { 
+            font-size: 11pt; 
+            text-align: left; 
+            font-weight: 600; 
+            color: #1e3a8a; /* Koyu mavi */
+            margin-bottom: 10px; 
+            border-bottom: 2px solid #1e3a8a; 
+            padding-bottom: 6px; 
+        }
+
+        /* Orijinal tasarımdaki gri/mavi arka planlı alt başlıklar */
+        .section-title { 
+            font-size: 10.5pt; 
+            font-weight: bold; 
+            background-color: #e2e8f0; /* Açık gri-mavi arka plan */
+            padding: 4px 8px; 
+            margin-top: 12px; 
+            margin-bottom: 8px; 
+            text-transform: uppercase; 
+            color: #1e3a8a; /* Koyu mavi yazı */
+        }
         
-        .step-container { display: flex; gap: 10px; margin-bottom: 5px; }
-        .step-number { font-weight: bold; font-size: 12pt; width: 20px; flex-shrink: 0; }
-        .step-content { flex-grow: 1; text-align: justify; }
+        .step-container { 
+            display: flex; 
+            gap: 6px; 
+            margin-bottom: 2px; 
+        }
+        
+        .step-number { 
+            font-weight: bold; 
+            font-size: 10pt; 
+            width: 18px; 
+            flex-shrink: 0; 
+            text-align: left;
+        }
+        
+        .step-content { 
+            flex-grow: 1; 
+            text-align: justify; 
+        }
 
-        .custom-table { width: 100%; border-collapse: collapse; margin-top: 10px; margin-bottom: 10px; font-size: 10pt; }
-        .custom-table th, .custom-table td { border: 1px solid #000; padding: 6px 8px; text-align: left; vertical-align: top;}
-        .custom-table th { background-color: #d1d5db; font-weight: bold; }
-        .custom-table tr:nth-child(even) { background-color: #f9fafb; }
+        /* Oklar numaraların altına sola hizalı */
+        .arrow-down { 
+            text-align: left; 
+            margin-left: 3px; /* Numaraların hemen altına gelmesi için */
+            margin-bottom: 2px;
+            font-weight: bold; 
+            font-size: 12pt; 
+            color: #1e3a8a; 
+        }
 
-        .footer { position: absolute; bottom: 15mm; left: 15mm; right: 15mm; font-size: 9pt; display: flex; justify-content: space-between; border-top: 1px solid #ccc; padding-top: 5px; }
+        .custom-table { 
+            width: 100%; 
+            border-collapse: collapse; 
+            margin-top: 6px; 
+            margin-bottom: 6px; 
+            font-size: 8.5pt; /* Tablo içeriği daha kompakt */
+        }
+        
+        .custom-table th, .custom-table td { 
+            border: 1px solid #000; 
+            padding: 4px 6px; 
+            text-align: left; 
+            vertical-align: top;
+        }
+        
+        .custom-table th { 
+            background-color: #d1d5db; /* Açık gri tablo başlığı */
+            font-weight: bold; 
+        }
+        
+        .custom-table tr:nth-child(even) { 
+            background-color: #f9fafb; 
+        }
 
-        /* Yükleme Ekranı */
-        #loader { display: none; position: fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.7); z-index: 50; color:white; flex-direction:column; justify-content:center; align-items:center; }
-        .spinner { border: 4px solid rgba(255,255,255,0.3); border-top: 4px solid white; border-radius: 50%; width: 50px; height: 50px; animation: spin 1s linear infinite; }
-        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        .footer { 
+            position: absolute; 
+            bottom: 10mm; 
+            left: 15mm; 
+            right: 15mm; 
+            font-size: 8pt; 
+            display: flex; 
+            justify-content: space-between; 
+            border-top: 1px solid #ccc; 
+            padding-top: 4px; 
+        }
 
-        /* Mesaj Kutusu */
-        #toast { visibility: hidden; min-width: 250px; background-color: #333; color: #fff; text-align: center; border-radius: 5px; padding: 16px; position: fixed; z-index: 60; left: 50%; bottom: 30px; transform: translateX(-50%); font-size: 17px; }
-        #toast.show { visibility: visible; animation: fadein 0.5s, fadeout 0.5s 2.5s; }
+        /* Loader %100 mat ve kapatıcı (arkadaki PDF'i gizler) */
+        #loader { 
+            display: none; 
+            position: fixed; 
+            top: 0; left: 0; 
+            width: 100%; height: 100%; 
+            background-color: #111827; /* Yarı şeffaf DEĞİL, tamamen kapalı siyah/lacivert */
+            z-index: 100; 
+            color: white; 
+            flex-direction: column; 
+            justify-content: center; 
+            align-items: center; 
+        }
+        
+        .spinner { 
+            border: 4px solid rgba(255,255,255,0.2); 
+            border-top: 4px solid #3b82f6; 
+            border-radius: 50%; 
+            width: 50px; height: 50px; 
+            animation: spin 1s linear infinite; 
+        }
+        
+        @keyframes spin { 
+            0% { transform: rotate(0deg); } 
+            100% { transform: rotate(360deg); } 
+        }
+
+        /* Bildirim (Toast) Mesajı */
+        #toast { 
+            visibility: hidden; 
+            min-width: 250px; 
+            background-color: #10b981; /* Başarılı yeşili */
+            color: #fff; 
+            text-align: center; 
+            border-radius: 8px; 
+            padding: 16px; 
+            position: fixed; 
+            z-index: 150; 
+            left: 50%; bottom: 30px; 
+            transform: translateX(-50%); 
+            font-size: 16px; 
+            box-shadow: 0 4px 6px rgba(0,0,0,0.3); 
+        }
+        
+        #toast.show { 
+            visibility: visible; 
+            animation: fadein 0.3s, fadeout 0.3s 2.7s; 
+        }
+        
         @keyframes fadein { from {bottom: 0; opacity: 0;} to {bottom: 30px; opacity: 1;} }
         @keyframes fadeout { from {bottom: 30px; opacity: 1;} to {bottom: 0; opacity: 0;} }
-
-        /* PDF Çıktısı İçin Güvenlik */
-        @media print {
-            .page { box-shadow: none; margin: 0; }
-        }
     </style>
 </head>
-<body class="flex flex-col md:flex-row h-screen">
+<body class="min-h-screen flex items-center justify-center p-4 sm:p-8">
 
-    <div class="w-full md:w-1/3 bg-white p-6 shadow-lg z-10 flex flex-col h-full">
-        <h1 class="text-2xl font-bold mb-2 text-blue-900">PDF Şablon Motoru</h1>
-        <p class="text-sm text-gray-600 mb-4">Verileri aşağıdaki formata göre <b>Anahtar|Değer</b> şeklinde girin. HTML etiketleri (örn: &lt;b&gt;kalın&lt;/b&gt;) kullanabilirsiniz.</p>
+    <div class="w-full max-w-3xl bg-white p-6 sm:p-8 rounded-2xl shadow-xl flex flex-col z-20 relative">
         
-        <textarea id="csv-input" class="w-full flex-grow p-3 border rounded-md font-mono text-sm bg-gray-50 focus:ring-2 focus:ring-blue-500 outline-none resize-none mb-4 whitespace-pre" spellcheck="false"></textarea>
-        
-        <div class="flex gap-2">
-            <button onclick="updateTemplate()" class="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-4 rounded transition duration-200 shadow">
-                Verileri Dönüştür (Önizle)
-            </button>
-            <button onclick="generatePDF()" class="flex-1 bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-4 rounded transition duration-200 shadow flex items-center justify-center gap-2">
-                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm3.293-7.707a1 1 0 011.414 0L9 10.586V3a1 1 0 112 0v7.586l1.293-1.293a1 1 0 111.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z" clip-rule="evenodd" /></svg>
-                HD PDF İndir
-            </button>
+        <div class="text-center mb-6">
+            <h1 class="text-3xl font-extrabold text-blue-900 mb-2">PDÖ PDF Şablon Motoru</h1>
+            <p class="text-gray-600 text-sm sm:text-base">Aşağıdaki verileri düzenleyin ve butona tıklayarak HD kalitede PDF olarak indirin. Sistem otomatik olarak A4 formatına dönüştürecektir.</p>
         </div>
+        
+        <div class="flex-grow flex flex-col mb-6">
+            <label for="csv-input" class="text-sm font-semibold text-gray-700 mb-2">Veri Giriş Alanı (Anahtar|Değer)</label>
+            <textarea id="csv-input" class="w-full h-[500px] sm:h-[400px] p-4 border border-gray-300 rounded-lg font-mono text-xs sm:text-sm bg-gray-50 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none resize-y whitespace-pre shadow-inner" spellcheck="false"></textarea>
+        </div>
+        
+        <button onclick="processAndDownloadPDF()" class="w-full bg-blue-700 hover:bg-blue-800 active:bg-blue-900 text-white font-bold py-4 px-6 rounded-lg transition duration-200 shadow-lg flex items-center justify-center gap-3 text-lg">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
+            PDF Olarak Dönüştür ve İndir
+        </button>
+
     </div>
 
-    <div class="w-full md:w-2/3 bg-gray-200 relative a4-container" id="preview-container">
-        
-        <!-- Tüm Sayfaları Kapsayan Div (PDF Çıktısı Buradan Alınacak) -->
+    <!-- Bu kısım ekranda görünmez, sadece PDF çıktısı için html2pdf tarafından kullanılır -->
+    <div id="pdf-template-wrapper">
         <div id="pdf-root">
             
             <!-- 1. SAYFA -->
             <div class="page" id="page1">
-                <div class="doc-title" id="t_doc_title">Trombotik Trombositopenik Purpura (TTP)</div>
-                <div class="doc-subtitle"><span id="t_doc_subtitle">Patofizyolojik Hikaye & Klinik Karar Verme Modeli (UpToDate Odaklı)</span> <br> <span id="t_doc_type" style="color:#000;">HEMATOLOJİ PDO NOTU</span></div>
+                <div class="doc-title" id="t_doc_title"></div>
+                <div class="doc-subtitle"><span id="t_doc_subtitle"></span> <br> <span id="t_doc_type" style="color:#000;"></span></div>
                 
-                <div class="section-title" id="t_s1_title">1. HASTALIĞIN PATOFİZYOLOJİK HİKAYESİ (OKLARLA ADIM ADIM AKIŞ)</div>
-                <p style="text-align: justify; margin-bottom: 15px;" id="t_s1_desc">TTP, bir trombosit tüketim ve mikrovasküler tıkanıklık hastalığıdır. Süreç genetik veya edinsel mekanizmayla başlayıp çoklu organ iskemisine uzanır:</p>
+                <div class="section-title" id="t_s1_title"></div>
+                <p style="text-align: justify; margin-bottom: 8px;" id="t_s1_desc"></p>
 
-                <!-- Adım 1 -->
-                <div class="step-container">
-                    <div class="step-number" id="t_s1_i1_num">1</div>
-                    <div class="step-content" id="t_s1_i1_text"></div>
-                </div>
-                <div class="arrow-down">↓</div>
-                
-                <!-- Adım 2 -->
-                <div class="step-container">
-                    <div class="step-number" id="t_s1_i2_num">2</div>
-                    <div class="step-content" id="t_s1_i2_text"></div>
-                </div>
-                <div class="arrow-down">↓</div>
+                <!-- Adım 1-6 -->
+                <div class="step-container"><div class="step-number" id="t_s1_i1_num"></div><div class="step-content" id="t_s1_i1_text"></div></div><div class="arrow-down">↓</div>
+                <div class="step-container"><div class="step-number" id="t_s1_i2_num"></div><div class="step-content" id="t_s1_i2_text"></div></div><div class="arrow-down">↓</div>
+                <div class="step-container"><div class="step-number" id="t_s1_i3_num"></div><div class="step-content" id="t_s1_i3_text"></div></div><div class="arrow-down">↓</div>
+                <div class="step-container"><div class="step-number" id="t_s1_i4_num"></div><div class="step-content" id="t_s1_i4_text"></div></div><div class="arrow-down">↓</div>
+                <div class="step-container"><div class="step-number" id="t_s1_i5_num"></div><div class="step-content" id="t_s1_i5_text"></div></div><div class="arrow-down">↓</div>
+                <div class="step-container"><div class="step-number" id="t_s1_i6_num"></div><div class="step-content" id="t_s1_i6_text"></div></div>
 
-                <!-- Adım 3 -->
-                <div class="step-container">
-                    <div class="step-number" id="t_s1_i3_num">3</div>
-                    <div class="step-content" id="t_s1_i3_text"></div>
-                </div>
-                <div class="arrow-down">↓</div>
-
-                <!-- Adım 4 -->
-                <div class="step-container">
-                    <div class="step-number" id="t_s1_i4_num">4</div>
-                    <div class="step-content" id="t_s1_i4_text"></div>
-                </div>
-                <div class="arrow-down">↓</div>
-
-                <!-- Adım 5 -->
-                <div class="step-container">
-                    <div class="step-number" id="t_s1_i5_num">5</div>
-                    <div class="step-content" id="t_s1_i5_text"></div>
-                </div>
-                <div class="arrow-down">↓</div>
-
-                <!-- Adım 6 -->
-                <div class="step-container">
-                    <div class="step-number" id="t_s1_i6_num">6</div>
-                    <div class="step-content" id="t_s1_i6_text"></div>
-                </div>
-
-                <div class="section-title" id="t_s2_title" style="margin-top: 25px;">2. KLİNİK TABLO: KLASİK PENTAD VS. MODERN UPTODATE YAKLAŞIMI</div>
+                <div class="section-title" id="t_s2_title" style="margin-top: 12px;"></div>
                 <p style="text-align: justify;" id="t_s2_desc"></p>
 
                 <table class="custom-table">
                     <thead>
                         <tr>
-                            <th id="t_tb1_h1" style="width: 25%;">Pentad Bileşeni</th>
-                            <th id="t_tb1_h2" style="width: 20%;">Görülme Sıklığı</th>
-                            <th id="t_tb1_h3" style="width: 55%;">Klinik / Patofizyolojik Açıklama</th>
+                            <th id="t_tb1_h1" style="width: 25%;"></th>
+                            <th id="t_tb1_h2" style="width: 20%;"></th>
+                            <th id="t_tb1_h3" style="width: 55%;"></th>
                         </tr>
                     </thead>
                     <tbody>
-                        <tr>
-                            <td id="t_tb1_r1_c1"></td>
-                            <td id="t_tb1_r1_c2"></td>
-                            <td id="t_tb1_r1_c3"></td>
-                        </tr>
-                        <tr>
-                            <td id="t_tb1_r2_c1"></td>
-                            <td id="t_tb1_r2_c2"></td>
-                            <td id="t_tb1_r2_c3"></td>
-                        </tr>
-                        <tr>
-                            <td id="t_tb1_r3_c1"></td>
-                            <td id="t_tb1_r3_c2"></td>
-                            <td id="t_tb1_r3_c3"></td>
-                        </tr>
-                        <tr>
-                            <td id="t_tb1_r4_c1"></td>
-                            <td id="t_tb1_r4_c2"></td>
-                            <td id="t_tb1_r4_c3"></td>
-                        </tr>
+                        <tr><td id="t_tb1_r1_c1"></td><td id="t_tb1_r1_c2"></td><td id="t_tb1_r1_c3"></td></tr>
+                        <tr><td id="t_tb1_r2_c1"></td><td id="t_tb1_r2_c2"></td><td id="t_tb1_r2_c3"></td></tr>
+                        <tr><td id="t_tb1_r3_c1"></td><td id="t_tb1_r3_c2"></td><td id="t_tb1_r3_c3"></td></tr>
+                        <tr><td id="t_tb1_r4_c1"></td><td id="t_tb1_r4_c2"></td><td id="t_tb1_r4_c3"></td></tr>
                     </tbody>
                 </table>
 
                 <div class="footer">
-                    <span id="t_f1_text1">Trombotik Trombositopenik Purpura (TTP) UpToDate Referanslı PDÖ Dokümanı</span>
+                    <span id="t_f1_text1"></span>
                     <span>Sayfa 1/2</span>
                 </div>
             </div>
@@ -192,66 +272,41 @@
             <!-- 2. SAYFA -->
             <div class="page" id="page2">
                 
-                <div class="section-title" id="t_s3_title" style="margin-top: 0;">3. LABORATUVAR BULGULARI VE TANISAL KRİTERLER</div>
-                <p style="text-align: justify; margin-bottom: 10px;" id="t_s3_desc"></p>
+                <div class="section-title" id="t_s3_title" style="margin-top: 0;"></div>
+                <p style="text-align: justify; margin-bottom: 6px;" id="t_s3_desc"></p>
 
                 <table class="custom-table">
                     <thead>
                         <tr>
-                            <th id="t_tb2_h1" style="width: 25%;">Test / Gösterge</th>
-                            <th id="t_tb2_h2" style="width: 25%;">Beklenen Sonuç</th>
-                            <th id="t_tb2_h3" style="width: 50%;">Klinik Önemi & Ayırıcı Tanı İpuçları</th>
+                            <th id="t_tb2_h1" style="width: 25%;"></th>
+                            <th id="t_tb2_h2" style="width: 25%;"></th>
+                            <th id="t_tb2_h3" style="width: 50%;"></th>
                         </tr>
                     </thead>
                     <tbody>
-                        <tr>
-                            <td id="t_tb2_r1_c1"></td>
-                            <td id="t_tb2_r1_c2"></td>
-                            <td id="t_tb2_r1_c3"></td>
-                        </tr>
-                        <tr>
-                            <td id="t_tb2_r2_c1"></td>
-                            <td id="t_tb2_r2_c2"></td>
-                            <td id="t_tb2_r2_c3"></td>
-                        </tr>
-                        <tr>
-                            <td id="t_tb2_r3_c1"></td>
-                            <td id="t_tb2_r3_c2"></td>
-                            <td id="t_tb2_r3_c3"></td>
-                        </tr>
-                        <tr>
-                            <td id="t_tb2_r4_c1"></td>
-                            <td id="t_tb2_r4_c2"></td>
-                            <td id="t_tb2_r4_c3"></td>
-                        </tr>
-                        <tr>
-                            <td id="t_tb2_r5_c1"></td>
-                            <td id="t_tb2_r5_c2"></td>
-                            <td id="t_tb2_r5_c3"></td>
-                        </tr>
-                        <tr>
-                            <td id="t_tb2_r6_c1"></td>
-                            <td id="t_tb2_r6_c2"></td>
-                            <td id="t_tb2_r6_c3"></td>
-                        </tr>
+                        <tr><td id="t_tb2_r1_c1"></td><td id="t_tb2_r1_c2"></td><td id="t_tb2_r1_c3"></td></tr>
+                        <tr><td id="t_tb2_r2_c1"></td><td id="t_tb2_r2_c2"></td><td id="t_tb2_r2_c3"></td></tr>
+                        <tr><td id="t_tb2_r3_c1"></td><td id="t_tb2_r3_c2"></td><td id="t_tb2_r3_c3"></td></tr>
+                        <tr><td id="t_tb2_r4_c1"></td><td id="t_tb2_r4_c2"></td><td id="t_tb2_r4_c3"></td></tr>
+                        <tr><td id="t_tb2_r5_c1"></td><td id="t_tb2_r5_c2"></td><td id="t_tb2_r5_c3"></td></tr>
+                        <tr><td id="t_tb2_r6_c1"></td><td id="t_tb2_r6_c2"></td><td id="t_tb2_r6_c3"></td></tr>
                     </tbody>
                 </table>
 
-                <div class="section-title" id="t_s4_title" style="margin-top: 20px;">4. 4. SINIF PDÖ KLİNİK TARTIŞMA VAKASI</div>
-                <div style="font-size: 10pt; line-height: 1.5; margin-bottom: 10px;">
+                <div class="section-title" id="t_s4_title" style="margin-top: 10px;"></div>
+                <div style="line-height: 1.4; margin-bottom: 6px;">
                     <div id="t_s4_p1"></div>
                     <div id="t_s4_p2"></div>
                     <div id="t_s4_p3"></div>
-                    <div id="t_s4_p4"></div>
-                    <div id="t_s4_p5"></div>
+                    <div id="t_s4_p4"></div> 
                 </div>
 
                 <table class="custom-table">
                     <thead>
                         <tr>
-                            <th id="t_tb3_h1" style="width: 25%;">Tetkik</th>
-                            <th id="t_tb3_h2" style="width: 35%;">Hasta Değeri</th>
-                            <th id="t_tb3_h3" style="width: 40%;">Referans Aralık</th>
+                            <th id="t_tb3_h1" style="width: 25%;"></th>
+                            <th id="t_tb3_h2" style="width: 35%;"></th>
+                            <th id="t_tb3_h3" style="width: 40%;"></th>
                         </tr>
                     </thead>
                     <tbody>
@@ -266,10 +321,12 @@
                         <tr><td id="t_tb3_r9_c1"></td><td colspan="2" id="t_tb3_r9_c2"></td></tr>
                     </tbody>
                 </table>
+                
+                <div id="t_bottom_title" style="font-weight: bold; margin-top: 10px; font-size: 10pt; color: #000;"></div>
 
                 <div class="footer">
-                    <span id="t_f2_text1">PDÖ MODÜLÜ - OTURUM TARTIŞMA SORULARI: <br> Trombotik Trombositopenik Purpura (TTP) UpToDate Referanslı PDÖ Dokümanı</span>
-                    <span style="display: flex; align-items: end;">Sayfa 2/2</span>
+                    <span id="t_f2_text1"></span>
+                    <span>Sayfa 2/2</span>
                 </div>
             </div>
 
@@ -279,15 +336,15 @@
     <!-- Yükleme Göstergesi -->
     <div id="loader">
         <div class="spinner"></div>
-        <p class="mt-4 font-bold text-lg">Yüksek Kaliteli (HD) PDF Oluşturuluyor...</p>
-        <p class="text-sm opacity-80">Lütfen bekleyin, bu işlem birkaç saniye sürebilir.</p>
+        <p class="mt-5 font-bold text-2xl tracking-wider text-white">PDF İşleniyor...</p>
+        <p class="text-gray-400 mt-2 text-center px-4">Lütfen bekleyin, şablon yüksek çözünürlüklü olarak derleniyor.</p>
     </div>
 
     <!-- Bildirim -->
     <div id="toast"></div>
 
     <script>
-        // Sayfa yüklendiğinde varsayılan verileri texteare'ya bas
+        // Sayfa yüklendiğinde varsayılan verileri metin alanına bas
         window.onload = function() {
             const defaultData = `doc_title|Trombotik Trombositopenik Purpura (TTP)
 doc_subtitle|Patofizyolojik Hikaye & Klinik Karar Verme Modeli (UpToDate Odaklı)
@@ -323,6 +380,7 @@ tb1_r3_c3|Dalgalı seyreder: Baş ağrısı, zihinsel bulanıklık, parestezi, k
 tb1_r4_c1|4. Renal Tutulum
 tb1_r4_c2|%40-%50
 tb1_r4_c3|HUS kadar belirgin değildir, genellikle hafif kreatinin artışı, mikroskobik hematüri veya proteinüri.
+f1_text1|Trombotik Trombositopenik Purpura (TTP) UpToDate Referanslı PDÖ Dokümanı
 s3_title|3. LABORATUVAR BULGULARI VE TANISAL KRİTERLER
 s3_desc|UpToDate tanı kriterlerine göre; başka bir nedene bağlanamayan trombositopeni ve mikroanjiyopatik hemolitik anemi (MAHA) birlikteliği klinik TTP tanısı için yeterlidir.
 tb2_h1|Test / Gösterge
@@ -350,8 +408,7 @@ s4_title|4. 4. SINIF PDÖ KLİNİK TARTIŞMA VAKASI
 s4_p1|<b>Hasta:</b> E.K., 34 yaşında kadın, muhasebeci <br><b>Başvuru:</b> Acil Servis
 s4_p2|<b>Başvuru Şikayeti:</b> 3 gündür giderek artan aşırı halsizlik, idrar renginde koyulaşma (çay rengi), bacaklarda morluklar ve son 12 saattir aralıklı gelişen unutkanlık ve kelime bulma güçlüğü.
 s4_p3|<b>Anamnez:</b> Bilinen kronik hastalığı ve düzenli ilaç kullanımı yok. Aktif enfeksiyon öyküsü tariflemiyor. Eşi, hastanın dün akşam isimleri karıştırdığını, bu sabah ise birkaç dakika süren kafa karışıklığı (konfüzyon) yaşayıp ardından normale döndüğünü bildiriyor.
-s4_p4|<b>Fizik Muayene:</b> Ateş: 37.8°C, Nabız: 104/dk (sinüzal), KB: 125/80 mmHg. Genel durum orta, hafif soluk ve sklera ikterik. Alt ekstremitelerde ve ön kolda basmakla solmayan dağınık peteşi ve palpabl olmayan purpurik lezyonlar mevcut. Organomegali veya lenfadenopati yok.
-s4_p5|<b>Nörolojik muayene:</b> Bilinç açık, oryantasyon tam ancak yer yer yavaş yanıt veriyor, fokal motor defisit yok.
+s4_p4|<b>Fizik Muayene:</b> Ateş: 37.8°C, Nabız: 104/dk (sinüzal), KB: 125/80 mmHg. Genel durum orta, hafif soluk ve sklera ikterik. Alt ekstremitelerde ve ön kolda basmakla solmayan dağınık peteşi ve palpabl olmayan purpurik lezyonlar mevcut. Organomegali veya lenfadenopati yok. <br><b>Nörolojik muayene:</b> Bilinç açık, oryantasyon tam ancak yer yer yavaş yanıt veriyor, fokal motor defisit yok.
 tb3_h1|Tetkik
 tb3_h2|Hasta Değeri
 tb3_h3|Referans Aralık
@@ -380,50 +437,61 @@ tb3_r8_c1|Kreatinin / TİT
 tb3_r8_c2|1.3 mg/dL/Mikroskobik hematüri (+), Protein (+)
 tb3_r8_c3|0.5-1.1 mg/dL / Normal
 tb3_r9_c1|Periferik Kan Yayması
-tb3_r9_c2|Her sahada 3-5 adet şistosit (kask hücresi, fragmente eritrositler; > %3), ileri derecede trombositopeni (kümeler yok), polikromazi. Lökosit morfolojisi doğal.`;
+tb3_r9_c2|Her sahada 3-5 adet şistosit (kask hücresi, fragmente eritrositler; > %3), ileri derecede trombositopeni (kümeler yok), polikromazi. Lökosit morfolojisi doğal.
+bottom_title|PDÖ MODÜLÜ - OTURUM TARTISMA SORULARI:
+f2_text1|Trombotik Trombositopenik Purpura (TTP) UpToDate Referanslı PDÖ Dokümanı`;
             document.getElementById('csv-input').value = defaultData;
-            updateTemplate();
         }
 
-        function updateTemplate() {
+        function processAndDownloadPDF() {
             const text = document.getElementById('csv-input').value;
-            const lines = text.split('\n');
-            let updatedCount = 0;
-
-            // Her satırı Anahtar|Değer olarak ayır
+            // İşletim sistemleri arası satır sonu farklılıklarını düzeltmek için Regex
+            const lines = text.split(/\r?\n/); 
+            
+            // Gizli DOM üzerindeki ID'leri bul ve verileri güncelle
             lines.forEach(line => {
+                if (!line.trim()) return; // Boş satırları atla
                 const separatorIndex = line.indexOf('|');
                 if (separatorIndex !== -1) {
                     const key = line.substring(0, separatorIndex).trim();
                     const value = line.substring(separatorIndex + 1).trim();
                     
-                    // Şablondaki t_anahtar ID'li elementi bul (çakışmaları önlemek için t_ prefixi eklendi)
                     const el = document.getElementById('t_' + key);
-                    if (el) {
-                        el.innerHTML = value;
-                        updatedCount++;
-                    }
+                    if (el) { el.innerHTML = value; }
                 }
             });
-            showToast("Veriler şablona başarıyla uygulandı!");
+
+            generatePDF();
         }
 
         function generatePDF() {
             const element = document.getElementById('pdf-root');
             const loader = document.getElementById('loader');
             
-            // Yükleniyor ekranını göster
+            // Yükleme ekranını göster (Arka planı tamamen siyah olduğu için PDF'in ekranda belirmesini gizler)
             loader.style.display = 'flex';
 
-            // HTML2PDF ayarları (HD kalite için ayarlandı)
+            // Kırpılma (clipping) sorununu çözmek için DOM'u sayfanın merkezine görünür halde koyuyoruz
+            document.body.classList.add('generating-pdf');
+            
+            // Kullanıcı sayfayı kaydırmışsa render hatası olmaması için ekranı en üste sabitliyoruz
+            window.scrollTo(0, 0); 
+
+            // Çözünürlük ayarı: Mobilde çok yüksek kalite tarayıcıyı çökertebilir
+            const isMobile = window.innerWidth < 768;
+            const pdfScale = isMobile ? 2 : 3;
+
             const opt = {
-                margin:       0, // Sayfalar CSS'te tam A4 ayarlandığı için sıfır marj
-                filename:     'PDO_Notu.pdf',
-                image:        { type: 'jpeg', quality: 1.0 },
+                margin:       0, 
+                filename:     'PDO_Vakasi.pdf',
+                image:        { type: 'jpeg', quality: 1.0 }, 
                 html2canvas:  { 
-                    scale: 3, // HD kalite için 3 veya 4 (yüksek değerler mobil cihazları zorlayabilir, 3 ideal)
+                    scale: pdfScale, 
                     useCORS: true,
-                    letterRendering: true
+                    letterRendering: true,
+                    scrollX: 0, // Sayfa kaydırmasını sıfırla
+                    scrollY: 0, 
+                    windowWidth: 794 // A4 genişliği (Pixel karşılığı)
                 },
                 jsPDF:        { 
                     unit: 'mm', 
@@ -433,17 +501,20 @@ tb3_r9_c2|Her sahada 3-5 adet şistosit (kask hücresi, fragmente eritrositler; 
                 pagebreak:    { mode: ['avoid-all', 'css', 'legacy'] }
             };
 
-            // Biraz beklet ki loader ekranda belirebilsin (UI block engeli)
+            // DOM'un render edilmesi ve CSS'lerin oturması için 500ms bekletiyoruz
             setTimeout(() => {
                 html2pdf().set(opt).from(element).save().then(() => {
+                    // İşlem bitince her şeyi eski haline getir
                     loader.style.display = 'none';
-                    showToast("PDF başarıyla indirildi!");
+                    document.body.classList.remove('generating-pdf'); 
+                    showToast("Harika! PDF başarıyla dönüştürüldü.");
                 }).catch(err => {
-                    console.error(err);
+                    console.error("PDF Hatası:", err);
                     loader.style.display = 'none';
-                    showToast("PDF oluşturulurken bir hata oluştu.");
+                    document.body.classList.remove('generating-pdf');
+                    showToast("PDF dönüştürülürken bir hata oluştu.");
                 });
-            }, 300);
+            }, 500);
         }
 
         function showToast(message) {
