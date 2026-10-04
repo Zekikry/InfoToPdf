@@ -1,0 +1,459 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TTP Şablon Oluşturucu & PDF Çıktı Aracı</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f3f4f6;
+            margin: 0;
+            overflow-x: hidden;
+        }
+
+        /* A4 Sayfa Tasarımı (Ekranda görünüm ve PDF için) */
+        .a4-container {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+            align-items: center;
+            padding: 20px;
+            overflow-y: auto;
+            max-height: 100vh;
+        }
+
+        .page {
+            width: 210mm;
+            height: 297mm;
+            background: white;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.15);
+            padding: 15mm 15mm;
+            box-sizing: border-box;
+            position: relative;
+            flex-shrink: 0;
+            font-size: 11pt;
+            line-height: 1.4;
+            color: #000;
+        }
+
+        /* Şablon İçin Özel Stiller */
+        .doc-title { font-size: 18pt; font-weight: bold; text-align: center; margin-bottom: 5px; color: #000; }
+        .doc-subtitle { font-size: 12pt; text-align: center; font-weight: 600; color: #1e3a8a; margin-bottom: 15px; border-bottom: 2px solid #1e3a8a; padding-bottom: 10px; }
+        .section-title { font-size: 12pt; font-weight: bold; background-color: #e5e7eb; padding: 5px 10px; margin-top: 15px; margin-bottom: 10px; text-transform: uppercase; color: #1e3a8a;}
+        
+        .arrow-down { text-align: center; margin: 5px 0; font-weight: bold; font-size: 16pt; color: #1e3a8a; }
+        
+        .step-container { display: flex; gap: 10px; margin-bottom: 5px; }
+        .step-number { font-weight: bold; font-size: 12pt; width: 20px; flex-shrink: 0; }
+        .step-content { flex-grow: 1; text-align: justify; }
+
+        .custom-table { width: 100%; border-collapse: collapse; margin-top: 10px; margin-bottom: 10px; font-size: 10pt; }
+        .custom-table th, .custom-table td { border: 1px solid #000; padding: 6px 8px; text-align: left; vertical-align: top;}
+        .custom-table th { background-color: #d1d5db; font-weight: bold; }
+        .custom-table tr:nth-child(even) { background-color: #f9fafb; }
+
+        .footer { position: absolute; bottom: 15mm; left: 15mm; right: 15mm; font-size: 9pt; display: flex; justify-content: space-between; border-top: 1px solid #ccc; padding-top: 5px; }
+
+        /* Yükleme Ekranı */
+        #loader { display: none; position: fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.7); z-index: 50; color:white; flex-direction:column; justify-content:center; align-items:center; }
+        .spinner { border: 4px solid rgba(255,255,255,0.3); border-top: 4px solid white; border-radius: 50%; width: 50px; height: 50px; animation: spin 1s linear infinite; }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+
+        /* Mesaj Kutusu */
+        #toast { visibility: hidden; min-width: 250px; background-color: #333; color: #fff; text-align: center; border-radius: 5px; padding: 16px; position: fixed; z-index: 60; left: 50%; bottom: 30px; transform: translateX(-50%); font-size: 17px; }
+        #toast.show { visibility: visible; animation: fadein 0.5s, fadeout 0.5s 2.5s; }
+        @keyframes fadein { from {bottom: 0; opacity: 0;} to {bottom: 30px; opacity: 1;} }
+        @keyframes fadeout { from {bottom: 30px; opacity: 1;} to {bottom: 0; opacity: 0;} }
+
+        /* PDF Çıktısı İçin Güvenlik */
+        @media print {
+            .page { box-shadow: none; margin: 0; }
+        }
+    </style>
+</head>
+<body class="flex flex-col md:flex-row h-screen">
+
+    <div class="w-full md:w-1/3 bg-white p-6 shadow-lg z-10 flex flex-col h-full">
+        <h1 class="text-2xl font-bold mb-2 text-blue-900">PDF Şablon Motoru</h1>
+        <p class="text-sm text-gray-600 mb-4">Verileri aşağıdaki formata göre <b>Anahtar|Değer</b> şeklinde girin. HTML etiketleri (örn: &lt;b&gt;kalın&lt;/b&gt;) kullanabilirsiniz.</p>
+        
+        <textarea id="csv-input" class="w-full flex-grow p-3 border rounded-md font-mono text-sm bg-gray-50 focus:ring-2 focus:ring-blue-500 outline-none resize-none mb-4 whitespace-pre" spellcheck="false"></textarea>
+        
+        <div class="flex gap-2">
+            <button onclick="updateTemplate()" class="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-4 rounded transition duration-200 shadow">
+                Verileri Dönüştür (Önizle)
+            </button>
+            <button onclick="generatePDF()" class="flex-1 bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-4 rounded transition duration-200 shadow flex items-center justify-center gap-2">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm3.293-7.707a1 1 0 011.414 0L9 10.586V3a1 1 0 112 0v7.586l1.293-1.293a1 1 0 111.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z" clip-rule="evenodd" /></svg>
+                HD PDF İndir
+            </button>
+        </div>
+    </div>
+
+    <div class="w-full md:w-2/3 bg-gray-200 relative a4-container" id="preview-container">
+        
+        <!-- Tüm Sayfaları Kapsayan Div (PDF Çıktısı Buradan Alınacak) -->
+        <div id="pdf-root">
+            
+            <!-- 1. SAYFA -->
+            <div class="page" id="page1">
+                <div class="doc-title" id="t_doc_title">Trombotik Trombositopenik Purpura (TTP)</div>
+                <div class="doc-subtitle"><span id="t_doc_subtitle">Patofizyolojik Hikaye & Klinik Karar Verme Modeli (UpToDate Odaklı)</span> <br> <span id="t_doc_type" style="color:#000;">HEMATOLOJİ PDO NOTU</span></div>
+                
+                <div class="section-title" id="t_s1_title">1. HASTALIĞIN PATOFİZYOLOJİK HİKAYESİ (OKLARLA ADIM ADIM AKIŞ)</div>
+                <p style="text-align: justify; margin-bottom: 15px;" id="t_s1_desc">TTP, bir trombosit tüketim ve mikrovasküler tıkanıklık hastalığıdır. Süreç genetik veya edinsel mekanizmayla başlayıp çoklu organ iskemisine uzanır:</p>
+
+                <!-- Adım 1 -->
+                <div class="step-container">
+                    <div class="step-number" id="t_s1_i1_num">1</div>
+                    <div class="step-content" id="t_s1_i1_text"></div>
+                </div>
+                <div class="arrow-down">↓</div>
+                
+                <!-- Adım 2 -->
+                <div class="step-container">
+                    <div class="step-number" id="t_s1_i2_num">2</div>
+                    <div class="step-content" id="t_s1_i2_text"></div>
+                </div>
+                <div class="arrow-down">↓</div>
+
+                <!-- Adım 3 -->
+                <div class="step-container">
+                    <div class="step-number" id="t_s1_i3_num">3</div>
+                    <div class="step-content" id="t_s1_i3_text"></div>
+                </div>
+                <div class="arrow-down">↓</div>
+
+                <!-- Adım 4 -->
+                <div class="step-container">
+                    <div class="step-number" id="t_s1_i4_num">4</div>
+                    <div class="step-content" id="t_s1_i4_text"></div>
+                </div>
+                <div class="arrow-down">↓</div>
+
+                <!-- Adım 5 -->
+                <div class="step-container">
+                    <div class="step-number" id="t_s1_i5_num">5</div>
+                    <div class="step-content" id="t_s1_i5_text"></div>
+                </div>
+                <div class="arrow-down">↓</div>
+
+                <!-- Adım 6 -->
+                <div class="step-container">
+                    <div class="step-number" id="t_s1_i6_num">6</div>
+                    <div class="step-content" id="t_s1_i6_text"></div>
+                </div>
+
+                <div class="section-title" id="t_s2_title" style="margin-top: 25px;">2. KLİNİK TABLO: KLASİK PENTAD VS. MODERN UPTODATE YAKLAŞIMI</div>
+                <p style="text-align: justify;" id="t_s2_desc"></p>
+
+                <table class="custom-table">
+                    <thead>
+                        <tr>
+                            <th id="t_tb1_h1" style="width: 25%;">Pentad Bileşeni</th>
+                            <th id="t_tb1_h2" style="width: 20%;">Görülme Sıklığı</th>
+                            <th id="t_tb1_h3" style="width: 55%;">Klinik / Patofizyolojik Açıklama</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td id="t_tb1_r1_c1"></td>
+                            <td id="t_tb1_r1_c2"></td>
+                            <td id="t_tb1_r1_c3"></td>
+                        </tr>
+                        <tr>
+                            <td id="t_tb1_r2_c1"></td>
+                            <td id="t_tb1_r2_c2"></td>
+                            <td id="t_tb1_r2_c3"></td>
+                        </tr>
+                        <tr>
+                            <td id="t_tb1_r3_c1"></td>
+                            <td id="t_tb1_r3_c2"></td>
+                            <td id="t_tb1_r3_c3"></td>
+                        </tr>
+                        <tr>
+                            <td id="t_tb1_r4_c1"></td>
+                            <td id="t_tb1_r4_c2"></td>
+                            <td id="t_tb1_r4_c3"></td>
+                        </tr>
+                    </tbody>
+                </table>
+
+                <div class="footer">
+                    <span id="t_f1_text1">Trombotik Trombositopenik Purpura (TTP) UpToDate Referanslı PDÖ Dokümanı</span>
+                    <span>Sayfa 1/2</span>
+                </div>
+            </div>
+
+            <!-- 2. SAYFA -->
+            <div class="page" id="page2">
+                
+                <div class="section-title" id="t_s3_title" style="margin-top: 0;">3. LABORATUVAR BULGULARI VE TANISAL KRİTERLER</div>
+                <p style="text-align: justify; margin-bottom: 10px;" id="t_s3_desc"></p>
+
+                <table class="custom-table">
+                    <thead>
+                        <tr>
+                            <th id="t_tb2_h1" style="width: 25%;">Test / Gösterge</th>
+                            <th id="t_tb2_h2" style="width: 25%;">Beklenen Sonuç</th>
+                            <th id="t_tb2_h3" style="width: 50%;">Klinik Önemi & Ayırıcı Tanı İpuçları</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td id="t_tb2_r1_c1"></td>
+                            <td id="t_tb2_r1_c2"></td>
+                            <td id="t_tb2_r1_c3"></td>
+                        </tr>
+                        <tr>
+                            <td id="t_tb2_r2_c1"></td>
+                            <td id="t_tb2_r2_c2"></td>
+                            <td id="t_tb2_r2_c3"></td>
+                        </tr>
+                        <tr>
+                            <td id="t_tb2_r3_c1"></td>
+                            <td id="t_tb2_r3_c2"></td>
+                            <td id="t_tb2_r3_c3"></td>
+                        </tr>
+                        <tr>
+                            <td id="t_tb2_r4_c1"></td>
+                            <td id="t_tb2_r4_c2"></td>
+                            <td id="t_tb2_r4_c3"></td>
+                        </tr>
+                        <tr>
+                            <td id="t_tb2_r5_c1"></td>
+                            <td id="t_tb2_r5_c2"></td>
+                            <td id="t_tb2_r5_c3"></td>
+                        </tr>
+                        <tr>
+                            <td id="t_tb2_r6_c1"></td>
+                            <td id="t_tb2_r6_c2"></td>
+                            <td id="t_tb2_r6_c3"></td>
+                        </tr>
+                    </tbody>
+                </table>
+
+                <div class="section-title" id="t_s4_title" style="margin-top: 20px;">4. 4. SINIF PDÖ KLİNİK TARTIŞMA VAKASI</div>
+                <div style="font-size: 10pt; line-height: 1.5; margin-bottom: 10px;">
+                    <div id="t_s4_p1"></div>
+                    <div id="t_s4_p2"></div>
+                    <div id="t_s4_p3"></div>
+                    <div id="t_s4_p4"></div>
+                    <div id="t_s4_p5"></div>
+                </div>
+
+                <table class="custom-table">
+                    <thead>
+                        <tr>
+                            <th id="t_tb3_h1" style="width: 25%;">Tetkik</th>
+                            <th id="t_tb3_h2" style="width: 35%;">Hasta Değeri</th>
+                            <th id="t_tb3_h3" style="width: 40%;">Referans Aralık</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr><td id="t_tb3_r1_c1"></td><td id="t_tb3_r1_c2"></td><td id="t_tb3_r1_c3"></td></tr>
+                        <tr><td id="t_tb3_r2_c1"></td><td id="t_tb3_r2_c2"></td><td id="t_tb3_r2_c3"></td></tr>
+                        <tr><td id="t_tb3_r3_c1"></td><td id="t_tb3_r3_c2"></td><td id="t_tb3_r3_c3"></td></tr>
+                        <tr><td id="t_tb3_r4_c1"></td><td id="t_tb3_r4_c2"></td><td id="t_tb3_r4_c3"></td></tr>
+                        <tr><td id="t_tb3_r5_c1"></td><td id="t_tb3_r5_c2"></td><td id="t_tb3_r5_c3"></td></tr>
+                        <tr><td id="t_tb3_r6_c1"></td><td id="t_tb3_r6_c2"></td><td id="t_tb3_r6_c3"></td></tr>
+                        <tr><td id="t_tb3_r7_c1"></td><td id="t_tb3_r7_c2"></td><td id="t_tb3_r7_c3"></td></tr>
+                        <tr><td id="t_tb3_r8_c1"></td><td id="t_tb3_r8_c2"></td><td id="t_tb3_r8_c3"></td></tr>
+                        <tr><td id="t_tb3_r9_c1"></td><td colspan="2" id="t_tb3_r9_c2"></td></tr>
+                    </tbody>
+                </table>
+
+                <div class="footer">
+                    <span id="t_f2_text1">PDÖ MODÜLÜ - OTURUM TARTIŞMA SORULARI: <br> Trombotik Trombositopenik Purpura (TTP) UpToDate Referanslı PDÖ Dokümanı</span>
+                    <span style="display: flex; align-items: end;">Sayfa 2/2</span>
+                </div>
+            </div>
+
+        </div>
+    </div>
+
+    <!-- Yükleme Göstergesi -->
+    <div id="loader">
+        <div class="spinner"></div>
+        <p class="mt-4 font-bold text-lg">Yüksek Kaliteli (HD) PDF Oluşturuluyor...</p>
+        <p class="text-sm opacity-80">Lütfen bekleyin, bu işlem birkaç saniye sürebilir.</p>
+    </div>
+
+    <!-- Bildirim -->
+    <div id="toast"></div>
+
+    <script>
+        // Sayfa yüklendiğinde varsayılan verileri texteare'ya bas
+        window.onload = function() {
+            const defaultData = `doc_title|Trombotik Trombositopenik Purpura (TTP)
+doc_subtitle|Patofizyolojik Hikaye & Klinik Karar Verme Modeli (UpToDate Odaklı)
+doc_type|HEMATOLOJİ PDO NOTU
+s1_title|1. HASTALIĞIN PATOFİZYOLOJİK HİKAYESİ (OKLARLA ADIM ADIM AKIŞ)
+s1_desc|TTP, bir trombosit tüketim ve mikrovasküler tıkanıklık hastalığıdır. Süreç genetik veya edinsel mekanizmayla başlayıp çoklu organ iskemisine uzanır:
+s1_i1_num|1
+s1_i1_text|<b>Tetikleyici / İmmün Yanıt (Etiyoloji):</b> B lenfositler tarafından ADAMTS13 metaloproteazına karşı nötralizan otoantikor (çoğunlukla IgG) sentezlenir (Edinsel iTTP) VEYA ADAMTS13 geninde bialelik inaktive edici mutasyon mevcuttur (Konjenital Upshaw-Schulman Sendromu).
+s1_i2_num|2
+s1_i2_text|<b>Enzimatik Yıkım Blokajı:</b> Plazmada ADAMTS13 aktivitesi kritik eşiğin altına iner (<%10). Endotelyal hücrelerden (Weibel-Palade cisimcikleri) yeni salınan "ultra-large" von Willebrand Faktör (ULVWF) multimerleri fizyolojik boyutlara parçalanamaz.
+s1_i3_num|3
+s1_i3_text|<b>Trombosit Agregasyonu & Mikrotrombüsler:</b> Yüksek kayma gerilimi (shear stress) altında devasa ULVWF iplikçikleri kanda açılır → Trombosit GPIB-IX-V reseptörlerine doğrudan ve kontrolsüz bağlanır → Yaygın mikrovasküler trombosit tıkanıklıkları (trombositten zengin mikrotrombüsler) oluşur.
+s1_i4_num|4
+s1_i4_text|<b>Periferik Trombosit Tüketimi (Trombositopeni):</b> Trombositler mikrodolaşımda kontrolsüzce harcandığından kemik iliği kompanzasyonu yetersiz kalır → Periferde derin trombositopeni tablosu (genellikle < 30.000/μL) ve mukokutanöz kanama eğilimi (peteşi, purpura) gelişir.
+s1_i5_num|5
+s1_i5_text|<b>Mekanik Hemoliz (MAHA):</b> Yüksek basınçla akan eritrositler, kapiller ve arteriyol lümenini dolduran mikrotrombüslere çarparak mekanik olarak parçalanır → Şistositler (kask hücresi, helmet cell) oluşur → İntravasküler hemoliz: İndirekt hiperbilirubinemi, LDH fırlaması ve serbest hemoglobin bağlayan haptoglobinde tükenme.
+s1_i6_num|6
+s1_i6_text|<b>Uç Organ Hipoperfüzyonu ve İskemi:</b> Mikrotrombüsler uç doku kapillerlerini tıkar → Beyin (konfüzyon, geçici fokal defisit, nöbet), kalp (troponin artışı, aritmi, sessiz enfarkt) ve böbrekte (hafif-orta proteinüri/hematüri) iskemik doku hasarı meydana gelir.
+s2_title|2. KLİNİK TABLO: KLASİK PENTAD VS. MODERN UPTODATE YAKLAŞIMI
+s2_desc|Tarihsel "Pentad" (Moschcowitz pentadı) hastaların <%10'unda bir arada bulunur. Tanı koymak için pentadın tamamını beklemek ölümcüldür.
+tb1_h1|Pentad Bileşeni
+tb1_h2|Görülme Sıklığı
+tb1_h3|Klinik / Patofizyolojik Açıklama
+tb1_r1_c1|1. Trombositopeni
+tb1_r1_c2|%98-%100
+tb1_r1_c3|Trombositten zengin mikrotrombüslerde tüketim. Genellikle derin (< 20.000-30.000/μL).
+tb1_r2_c1|2. MAHA (Hemoliz)
+tb1_r2_c2|%98-%100
+tb1_r2_c3|Coombs negatif, yüksek LDH, periferik yaymada şistositler (> %1). İkisi birlikte tanı için zorunludur.
+tb1_r3_c1|3. Nörolojik Bulgular
+tb1_r3_c2|%50-%70
+tb1_r3_c3|Dalgalı seyreder: Baş ağrısı, zihinsel bulanıklık, parestezi, konuşma bozukluğu, nadiren koma.
+tb1_r4_c1|4. Renal Tutulum
+tb1_r4_c2|%40-%50
+tb1_r4_c3|HUS kadar belirgin değildir, genellikle hafif kreatinin artışı, mikroskobik hematüri veya proteinüri.
+s3_title|3. LABORATUVAR BULGULARI VE TANISAL KRİTERLER
+s3_desc|UpToDate tanı kriterlerine göre; başka bir nedene bağlanamayan trombositopeni ve mikroanjiyopatik hemolitik anemi (MAHA) birlikteliği klinik TTP tanısı için yeterlidir.
+tb2_h1|Test / Gösterge
+tb2_h2|Beklenen Sonuç
+tb2_h3|Klinik Önemi & Ayırıcı Tanı İpuçları
+tb2_r1_c1|ADAMTS13 Aktivitesi
+tb2_r1_c2|<%10 (Kesin Tanı)
+tb2_r1_c3|TTP için patognomoniktir. Diğer TMA'larda (HUS, DIC, preeklampsi) > %10-20 seyreder.
+tb2_r2_c1|ADAMTS13 İnhibitörü
+tb2_r2_c2|Pozitif (>0.4-0.5 BU/mL)
+tb2_r2_c3|Edinsel (immün aracılı / iTTP) formu konjenital formdan ayırt eder.
+tb2_r3_c1|Periferik Yayma
+tb2_r3_c2|Şistosit > %1
+tb2_r3_c3|Helmet cells, üçgen hücreler, polikromazi, trombosit kümelerinin yokluğu.
+tb2_r4_c1|Hemoliz Paneli
+tb2_r4_c2|LDH ↑↑↑, Haptoglobin (<10 mg/dL), İndirekt Bilirubin ↑
+tb2_r4_c3|İntravasküler mekanik parçalanmanın direkt kanıtı. LDH hemoliz ve doku iskemisini yansıtır.
+tb2_r5_c1|Direkt Antiglobulin (DAT/Coombs)
+tb2_r5_c2|Negatif
+tb2_r5_c3|Otoimmün hemolitik anemiyi (örn. Evans Sendromu) dışlamak için şarttır.
+tb2_r6_c1|Koagülasyon (PT, PTT, Fibrinojen)
+tb2_r6_c2|Normal
+tb2_r6_c3|DIC'ten (Dissemine İntravasküler Koagülasyon) ayrımda kritik basamaktır.
+s4_title|4. 4. SINIF PDÖ KLİNİK TARTIŞMA VAKASI
+s4_p1|<b>Hasta:</b> E.K., 34 yaşında kadın, muhasebeci <br><b>Başvuru:</b> Acil Servis
+s4_p2|<b>Başvuru Şikayeti:</b> 3 gündür giderek artan aşırı halsizlik, idrar renginde koyulaşma (çay rengi), bacaklarda morluklar ve son 12 saattir aralıklı gelişen unutkanlık ve kelime bulma güçlüğü.
+s4_p3|<b>Anamnez:</b> Bilinen kronik hastalığı ve düzenli ilaç kullanımı yok. Aktif enfeksiyon öyküsü tariflemiyor. Eşi, hastanın dün akşam isimleri karıştırdığını, bu sabah ise birkaç dakika süren kafa karışıklığı (konfüzyon) yaşayıp ardından normale döndüğünü bildiriyor.
+s4_p4|<b>Fizik Muayene:</b> Ateş: 37.8°C, Nabız: 104/dk (sinüzal), KB: 125/80 mmHg. Genel durum orta, hafif soluk ve sklera ikterik. Alt ekstremitelerde ve ön kolda basmakla solmayan dağınık peteşi ve palpabl olmayan purpurik lezyonlar mevcut. Organomegali veya lenfadenopati yok.
+s4_p5|<b>Nörolojik muayene:</b> Bilinç açık, oryantasyon tam ancak yer yer yavaş yanıt veriyor, fokal motor defisit yok.
+tb3_h1|Tetkik
+tb3_h2|Hasta Değeri
+tb3_h3|Referans Aralık
+tb3_r1_c1|Hemoglobin/MCV
+tb3_r1_c2|7.6 g/dL/88 fL
+tb3_r1_c3|12.0-15.5 g/dL/80-100 fL
+tb3_r2_c1|Trombosit Sayısı
+tb3_r2_c2|14.000/μL
+tb3_r2_c3|150.000-450.000/μL
+tb3_r3_c1|Retikülosit Oranı
+tb3_r3_c2|% 7.2
+tb3_r3_c3|% 0.5 - % 2.0
+tb3_r4_c1|Serum LDH/Total (Ind.) Bilirubin
+tb3_r4_c2|1.480 U/L / 3.8 (3.1) mg/dL
+tb3_r4_c3|120-240 U/L/0.2-1.2 mg/dL
+tb3_r5_c1|Haptoglobin
+tb3_r5_c2|<6 mg/dL (Tespit edilemedi)
+tb3_r5_c3|30-200 mg/dL
+tb3_r6_c1|Direkt Coombs (DAT)
+tb3_r6_c2|Negatif
+tb3_r6_c3|Negatif
+tb3_r7_c1|PT/INR/aPTT/ Fibrinojen
+tb3_r7_c2|12.1 sn/1.02/28 sn/310 mg/dL
+tb3_r7_c3|Tümü Normal Aralıkta
+tb3_r8_c1|Kreatinin / TİT
+tb3_r8_c2|1.3 mg/dL/Mikroskobik hematüri (+), Protein (+)
+tb3_r8_c3|0.5-1.1 mg/dL / Normal
+tb3_r9_c1|Periferik Kan Yayması
+tb3_r9_c2|Her sahada 3-5 adet şistosit (kask hücresi, fragmente eritrositler; > %3), ileri derecede trombositopeni (kümeler yok), polikromazi. Lökosit morfolojisi doğal.`;
+            document.getElementById('csv-input').value = defaultData;
+            updateTemplate();
+        }
+
+        function updateTemplate() {
+            const text = document.getElementById('csv-input').value;
+            const lines = text.split('\n');
+            let updatedCount = 0;
+
+            // Her satırı Anahtar|Değer olarak ayır
+            lines.forEach(line => {
+                const separatorIndex = line.indexOf('|');
+                if (separatorIndex !== -1) {
+                    const key = line.substring(0, separatorIndex).trim();
+                    const value = line.substring(separatorIndex + 1).trim();
+                    
+                    // Şablondaki t_anahtar ID'li elementi bul (çakışmaları önlemek için t_ prefixi eklendi)
+                    const el = document.getElementById('t_' + key);
+                    if (el) {
+                        el.innerHTML = value;
+                        updatedCount++;
+                    }
+                }
+            });
+            showToast("Veriler şablona başarıyla uygulandı!");
+        }
+
+        function generatePDF() {
+            const element = document.getElementById('pdf-root');
+            const loader = document.getElementById('loader');
+            
+            // Yükleniyor ekranını göster
+            loader.style.display = 'flex';
+
+            // HTML2PDF ayarları (HD kalite için ayarlandı)
+            const opt = {
+                margin:       0, // Sayfalar CSS'te tam A4 ayarlandığı için sıfır marj
+                filename:     'PDO_Notu.pdf',
+                image:        { type: 'jpeg', quality: 1.0 },
+                html2canvas:  { 
+                    scale: 3, // HD kalite için 3 veya 4 (yüksek değerler mobil cihazları zorlayabilir, 3 ideal)
+                    useCORS: true,
+                    letterRendering: true
+                },
+                jsPDF:        { 
+                    unit: 'mm', 
+                    format: 'a4', 
+                    orientation: 'portrait' 
+                },
+                pagebreak:    { mode: ['avoid-all', 'css', 'legacy'] }
+            };
+
+            // Biraz beklet ki loader ekranda belirebilsin (UI block engeli)
+            setTimeout(() => {
+                html2pdf().set(opt).from(element).save().then(() => {
+                    loader.style.display = 'none';
+                    showToast("PDF başarıyla indirildi!");
+                }).catch(err => {
+                    console.error(err);
+                    loader.style.display = 'none';
+                    showToast("PDF oluşturulurken bir hata oluştu.");
+                });
+            }, 300);
+        }
+
+        function showToast(message) {
+            const toast = document.getElementById("toast");
+            toast.innerText = message;
+            toast.className = "show";
+            setTimeout(function(){ 
+                toast.className = toast.className.replace("show", ""); 
+            }, 3000);
+        }
+    </script>
+</body>
+</html>
