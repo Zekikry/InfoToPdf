@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="tr">
 <head>
-    <meta charset="UTF-8">a
+    <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>PDÖ PDF Şablon Motoru</title>
     <!-- Tailwind CSS -->
@@ -12,54 +12,58 @@
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
     
     <style>
+        /* Genel Gövde Ayarları */
         body {
             font-family: 'Inter', sans-serif;
-            background-color: #f3f4f6;
+            background-color: #f3f4f6; /* Tailwind gray-100 */
             margin: 0;
+            padding: 0;
             -webkit-font-smoothing: antialiased;
+            position: relative;
+            min-height: 100vh;
         }
 
         /* 
-         * PDF Şablonu İçin A4 Stilleri 
+         * PDF ŞABLONU KESİN ÇÖZÜMÜ (KAYMA ENGELEYİCİ):
+         * Şablon ekran dışına itilmez (-9999px YAPILMAZ). Tam (0,0) noktasında tutulur.
+         * Kullanıcının görmemesi için opacity: 0.01 yapılır ve arkada bekletilir.
          */
         #pdf-template-wrapper {
-            display: none; /* Normalde tamamen kapalı, sadece buton basılınca açılır */
-        }
-
-        /* 
-         * Kırpılma (Clipping) Hatası Çözümü:
-         * PDF oluşturulurken wrapper tam ekranın sol üstüne alınır ve tam görünür yapılır.
-         * Kullanıcının bunu görmemesini z-index'i yüksek olan tam mat SİYAH Loader ekranı ile sağlıyoruz.
-         */
-        body.generating-pdf #pdf-template-wrapper {
-            display: block;
             position: absolute;
             top: 0;
             left: 0;
-            width: 210mm; /* A4 genişliği sabitlenir */
-            z-index: 10;
-            background: #e5e7eb; /* Hata payı arka planı */
+            width: 210mm;
+            z-index: 0;
+            opacity: 0.01;
+            pointer-events: none; /* Tıklamaları engelle */
+            transform-origin: top left;
         }
 
+        #pdf-root {
+            background-color: #ffffff; /* Arka plan kesinlikle beyaz olmalı */
+        }
+
+        /* A4 Sayfa Stilleri */
         .page {
             width: 210mm;
             height: 297mm;
             background: white;
-            padding: 10mm 15mm; /* İç boşluklar milimetrik ayarlandı */
+            padding: 12mm 15mm;
             box-sizing: border-box;
             position: relative;
-            font-size: 9.5pt; /* Taşmayı önlemek için 10pt -> 9.5pt yapıldı */
+            font-size: 9.5pt; /* Taşmayı önlemek için 9.5pt kullanıldı */
             line-height: 1.35;
             color: #000;
-            overflow: hidden; /* Dışarı taşan ufak pikselleri gizler */
+            overflow: hidden;
+            margin: 0;
         }
 
-        /* Sola dayalı başlıklar */
+        /* Sola dayalı başlıklar ve mavi/gri renk tonları (İstenilen Tasarım) */
         .doc-title { 
             font-size: 16pt; 
             font-weight: bold; 
             text-align: left; 
-            margin-bottom: 2px; 
+            margin-bottom: 4px; 
             color: #000; 
         }
         
@@ -67,28 +71,29 @@
             font-size: 11pt; 
             text-align: left; 
             font-weight: 600; 
-            color: #1e3a8a; /* Koyu mavi */
-            margin-bottom: 10px; 
+            color: #1e3a8a; /* Koyu Mavi */
+            margin-bottom: 12px; 
             border-bottom: 2px solid #1e3a8a; 
             padding-bottom: 6px; 
         }
 
-        /* Orijinal tasarımdaki gri/mavi arka planlı alt başlıklar */
         .section-title { 
             font-size: 10.5pt; 
             font-weight: bold; 
-            background-color: #e2e8f0; /* Açık gri-mavi arka plan */
+            background-color: #e2e8f0; /* Açık Gri/Mavi Arka Plan */
             padding: 4px 8px; 
             margin-top: 12px; 
             margin-bottom: 8px; 
             text-transform: uppercase; 
-            color: #1e3a8a; /* Koyu mavi yazı */
+            color: #1e3a8a; /* Koyu Mavi Yazı */
+            text-align: left;
         }
         
+        /* Adım ve Akış Tasarımları */
         .step-container { 
             display: flex; 
-            gap: 6px; 
-            margin-bottom: 2px; 
+            gap: 8px; 
+            margin-bottom: 3px; 
         }
         
         .step-number { 
@@ -104,43 +109,46 @@
             text-align: justify; 
         }
 
-        /* Oklar numaraların altına sola hizalı */
+        /* Oklar Numaraların Altında */
         .arrow-down { 
             text-align: left; 
-            margin-left: 3px; /* Numaraların hemen altına gelmesi için */
-            margin-bottom: 2px;
+            margin-left: 3px; 
+            margin-bottom: 3px;
             font-weight: bold; 
             font-size: 12pt; 
-            color: #1e3a8a; 
+            color: #1e3a8a; /* Mavi ok */
         }
 
+        /* Tablo Stilleri */
         .custom-table { 
             width: 100%; 
             border-collapse: collapse; 
-            margin-top: 6px; 
-            margin-bottom: 6px; 
-            font-size: 8.5pt; /* Tablo içeriği daha kompakt */
+            margin-top: 8px; 
+            margin-bottom: 8px; 
+            font-size: 8.5pt;
         }
         
         .custom-table th, .custom-table td { 
             border: 1px solid #000; 
-            padding: 4px 6px; 
+            padding: 5px 6px; 
             text-align: left; 
             vertical-align: top;
         }
         
         .custom-table th { 
-            background-color: #d1d5db; /* Açık gri tablo başlığı */
+            background-color: #f3f4f6;
             font-weight: bold; 
+            color: #000;
         }
         
         .custom-table tr:nth-child(even) { 
             background-color: #f9fafb; 
         }
 
+        /* Alt Bilgi (Footer) */
         .footer { 
             position: absolute; 
-            bottom: 10mm; 
+            bottom: 12mm; 
             left: 15mm; 
             right: 15mm; 
             font-size: 8pt; 
@@ -150,14 +158,14 @@
             padding-top: 4px; 
         }
 
-        /* Loader %100 mat ve kapatıcı (arkadaki PDF'i gizler) */
+        /* Kullanıcı Arayüzü İçin Loader (Tam Kapatıcı Siyah Ekran) */
         #loader { 
             display: none; 
             position: fixed; 
             top: 0; left: 0; 
             width: 100%; height: 100%; 
-            background-color: #111827; /* Yarı şeffaf DEĞİL, tamamen kapalı siyah/lacivert */
-            z-index: 100; 
+            background-color: #111827; 
+            z-index: 9999; /* Her şeyin üstünde */
             color: white; 
             flex-direction: column; 
             justify-content: center; 
@@ -181,13 +189,13 @@
         #toast { 
             visibility: hidden; 
             min-width: 250px; 
-            background-color: #10b981; /* Başarılı yeşili */
+            background-color: #10b981; 
             color: #fff; 
             text-align: center; 
             border-radius: 8px; 
             padding: 16px; 
             position: fixed; 
-            z-index: 150; 
+            z-index: 10000; 
             left: 50%; bottom: 30px; 
             transform: translateX(-50%); 
             font-size: 16px; 
@@ -203,28 +211,30 @@
         @keyframes fadeout { from {bottom: 30px; opacity: 1;} to {bottom: 0; opacity: 0;} }
     </style>
 </head>
-<body class="min-h-screen flex items-center justify-center p-4 sm:p-8">
+<body>
 
-    <div class="w-full max-w-3xl bg-white p-6 sm:p-8 rounded-2xl shadow-xl flex flex-col z-20 relative">
-        
-        <div class="text-center mb-6">
+    <!-- ANA EKRAN (KULLANICI ARAYÜZÜ) -->
+    <div id="main-ui" class="relative z-10 w-full min-h-screen flex items-center justify-center p-4 sm:p-8 pointer-events-auto">
+        <div class="w-full max-w-3xl bg-white p-6 sm:p-8 rounded-2xl shadow-xl flex flex-col">
+            
+            <div class="text-center mb-6">
             <h1 class="text-3xl font-extrabold text-blue-900 mb-2">PDÖ PDF Şablon Motoru</h1>
             <p class="text-gray-600 text-sm sm:text-base">Aşağıdaki verileri düzenleyin ve butona tıklayarak HD kalitede PDF olarak indirin. Sistem otomatik olarak A4 formatına dönüştürecektir.</p>
         </div>
         
         <div class="flex-grow flex flex-col mb-6">
             <label for="csv-input" class="text-sm font-semibold text-gray-700 mb-2">Veri Giriş Alanı (Anahtar|Değer)</label>
-            <textarea id="csv-input" class="w-full h-[500px] sm:h-[400px] p-4 border border-gray-300 rounded-lg font-mono text-xs sm:text-sm bg-gray-50 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none resize-y whitespace-pre shadow-inner" spellcheck="false"></textarea>
+            <textarea id="csv-input" class="w-full h-56 sm:h-[400px] p-4 border border-gray-300 rounded-lg font-mono text-xs sm:text-sm bg-gray-50 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none resize-y whitespace-pre shadow-inner" spellcheck="false"></textarea>
         </div>
         
         <button onclick="processAndDownloadPDF()" class="w-full bg-blue-700 hover:bg-blue-800 active:bg-blue-900 text-white font-bold py-4 px-6 rounded-lg transition duration-200 shadow-lg flex items-center justify-center gap-3 text-lg">
             <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
             PDF Olarak Dönüştür ve İndir
-        </button>
-
+            </button>
+        </div>
     </div>
 
-    <!-- Bu kısım ekranda görünmez, sadece PDF çıktısı için html2pdf tarafından kullanılır -->
+    <!-- PDF ŞABLONU (Arka planda gizli, render için tam (0,0) konumunda bekler) -->
     <div id="pdf-template-wrapper">
         <div id="pdf-root">
             
@@ -318,11 +328,12 @@
                         <tr><td id="t_tb3_r6_c1"></td><td id="t_tb3_r6_c2"></td><td id="t_tb3_r6_c3"></td></tr>
                         <tr><td id="t_tb3_r7_c1"></td><td id="t_tb3_r7_c2"></td><td id="t_tb3_r7_c3"></td></tr>
                         <tr><td id="t_tb3_r8_c1"></td><td id="t_tb3_r8_c2"></td><td id="t_tb3_r8_c3"></td></tr>
+                        <!-- Periferik Yayma tüm kolonları kaplıyor -->
                         <tr><td id="t_tb3_r9_c1"></td><td colspan="2" id="t_tb3_r9_c2"></td></tr>
                     </tbody>
                 </table>
                 
-                <div id="t_bottom_title" style="font-weight: bold; margin-top: 10px; font-size: 10pt; color: #000;"></div>
+                <div id="t_bottom_title" style="font-weight: bold; margin-top: 10px; font-size: 10pt; color: #1e3a8a; background-color:#e2e8f0; padding: 4px; display:inline-block;"></div>
 
                 <div class="footer">
                     <span id="t_f2_text1"></span>
@@ -337,14 +348,14 @@
     <div id="loader">
         <div class="spinner"></div>
         <p class="mt-5 font-bold text-2xl tracking-wider text-white">PDF İşleniyor...</p>
-        <p class="text-gray-400 mt-2 text-center px-4">Lütfen bekleyin, şablon yüksek çözünürlüklü olarak derleniyor.</p>
+        <p class="text-gray-400 mt-2 text-center px-4 text-sm max-w-md">Lütfen sayfayı kapatmayın veya yenilemeyin.</p>
     </div>
 
     <!-- Bildirim -->
     <div id="toast"></div>
 
     <script>
-        // Sayfa yüklendiğinde varsayılan verileri metin alanına bas
+        // Varsayılan veriler
         window.onload = function() {
             const defaultData = `doc_title|Trombotik Trombositopenik Purpura (TTP)
 doc_subtitle|Patofizyolojik Hikaye & Klinik Karar Verme Modeli (UpToDate Odaklı)
@@ -408,7 +419,7 @@ s4_title|4. 4. SINIF PDÖ KLİNİK TARTIŞMA VAKASI
 s4_p1|<b>Hasta:</b> E.K., 34 yaşında kadın, muhasebeci <br><b>Başvuru:</b> Acil Servis
 s4_p2|<b>Başvuru Şikayeti:</b> 3 gündür giderek artan aşırı halsizlik, idrar renginde koyulaşma (çay rengi), bacaklarda morluklar ve son 12 saattir aralıklı gelişen unutkanlık ve kelime bulma güçlüğü.
 s4_p3|<b>Anamnez:</b> Bilinen kronik hastalığı ve düzenli ilaç kullanımı yok. Aktif enfeksiyon öyküsü tariflemiyor. Eşi, hastanın dün akşam isimleri karıştırdığını, bu sabah ise birkaç dakika süren kafa karışıklığı (konfüzyon) yaşayıp ardından normale döndüğünü bildiriyor.
-s4_p4|<b>Fizik Muayene:</b> Ateş: 37.8°C, Nabız: 104/dk (sinüzal), KB: 125/80 mmHg. Genel durum orta, hafif soluk ve sklera ikterik. Alt ekstremitelerde ve ön kolda basmakla solmayan dağınık peteşi ve palpabl olmayan purpurik lezyonlar mevcut. Organomegali veya lenfadenopati yok. <br><b>Nörolojik muayene:</b> Bilinç açık, oryantasyon tam ancak yer yer yavaş yanıt veriyor, fokal motor defisit yok.
+s4_p4|<b>Fizik ve Nörolojik Muayene:</b> Ateş: 37.8°C, Nabız: 104/dk (sinüzal), KB: 125/80 mmHg. Genel durum orta, hafif soluk ve sklera ikterik. Alt ekstremitelerde ve ön kolda basmakla solmayan dağınık peteşi ve palpabl olmayan purpurik lezyonlar mevcut. Organomegali veya lenfadenopati yok. Nörolojik muayene: Bilinç açık, oryantasyon tam ancak yer yer yavaş yanıt veriyor, fokal motor defisit yok.
 tb3_h1|Tetkik
 tb3_h2|Hasta Değeri
 tb3_h3|Referans Aralık
@@ -443,19 +454,17 @@ f2_text1|Trombotik Trombositopenik Purpura (TTP) UpToDate Referanslı PDÖ Dokü
             document.getElementById('csv-input').value = defaultData;
         }
 
+        // CSV Verilerini Şablona Aktarma
         function processAndDownloadPDF() {
             const text = document.getElementById('csv-input').value;
-            // İşletim sistemleri arası satır sonu farklılıklarını düzeltmek için Regex
             const lines = text.split(/\r?\n/); 
             
-            // Gizli DOM üzerindeki ID'leri bul ve verileri güncelle
             lines.forEach(line => {
-                if (!line.trim()) return; // Boş satırları atla
+                if (!line.trim()) return;
                 const separatorIndex = line.indexOf('|');
                 if (separatorIndex !== -1) {
                     const key = line.substring(0, separatorIndex).trim();
                     const value = line.substring(separatorIndex + 1).trim();
-                    
                     const el = document.getElementById('t_' + key);
                     if (el) { el.innerHTML = value; }
                 }
@@ -464,66 +473,65 @@ f2_text1|Trombotik Trombositopenik Purpura (TTP) UpToDate Referanslı PDÖ Dokü
             generatePDF();
         }
 
+        // KAYMAYI ENGELLEYEN VE HTML2PDF'Yİ ÇAĞIRAN GÜVENLİ FONKSİYON
         function generatePDF() {
-            const element = document.getElementById('pdf-root');
+            const wrapper = document.getElementById('pdf-template-wrapper');
             const loader = document.getElementById('loader');
+            const element = document.getElementById('pdf-root');
             
-            // Yükleme ekranını göster (Arka planı tamamen siyah olduğu için PDF'in ekranda belirmesini gizler)
+            // 1. KAYMAYI (CROP) ÖNLEMEK İÇİN SAYFAYI EN TEPEYE AL
+            window.scrollTo(0, 0);
+
+            // 2. Siyah yükleme ekranını açarak kullanıcıdan arka planı gizle
             loader.style.display = 'flex';
 
-            // Kırpılma (clipping) sorununu çözmek için DOM'u sayfanın merkezine görünür halde koyuyoruz
-            document.body.classList.add('generating-pdf');
-            
-            // Kullanıcı sayfayı kaydırmışsa render hatası olmaması için ekranı en üste sabitliyoruz
-            window.scrollTo(0, 0); 
-
-            // Çözünürlük ayarı: Mobilde çok yüksek kalite tarayıcıyı çökertebilir
-            const isMobile = window.innerWidth < 768;
-            const pdfScale = isMobile ? 2 : 3;
-
-            const opt = {
-                margin:       0, 
-                filename:     'PDO_Vakasi.pdf',
-                image:        { type: 'jpeg', quality: 1.0 }, 
-                html2canvas:  { 
-                    scale: pdfScale, 
-                    useCORS: true,
-                    letterRendering: true,
-                    scrollX: 0, // Sayfa kaydırmasını sıfırla
-                    scrollY: 0, 
-                    windowWidth: 794 // A4 genişliği (Pixel karşılığı)
-                },
-                jsPDF:        { 
-                    unit: 'mm', 
-                    format: 'a4', 
-                    orientation: 'portrait' 
-                },
-                pagebreak:    { mode: ['avoid-all', 'css', 'legacy'] }
-            };
-
-            // DOM'un render edilmesi ve CSS'lerin oturması için 500ms bekletiyoruz
+            // 3. UI'ın yüklenmesi için 500ms bekle, ardından PDF'i oluştur
             setTimeout(() => {
+                
+                // Şablonu görünür yap (Siyah ekranın arkasında kalacak)
+                wrapper.style.opacity = '1';
+                wrapper.style.zIndex = '50';
+
+                // Yüksek Kalite PDF Ayarları (Scroll 0 olarak zorlanmıştır)
+                const opt = {
+                    margin:       0,
+                    filename:     'PDO_Modulu.pdf',
+                    image:        { type: 'jpeg', quality: 1.0 },
+                    html2canvas:  { 
+                        scale: 2, // HD Kalite (Mobil için 3 yerine 2 kullanıldı, çökmeyi önler)
+                        useCORS: true,
+                        scrollX: 0, 
+                        scrollY: 0,
+                        windowWidth: document.documentElement.offsetWidth,
+                        windowHeight: document.documentElement.offsetHeight
+                    },
+                    jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' }
+                };
+
+                // Dönüştürme işlemini başlat
                 html2pdf().set(opt).from(element).save().then(() => {
-                    // İşlem bitince her şeyi eski haline getir
+                    // İşlem bitince şablonu tekrar gizle
+                    wrapper.style.opacity = '0.01';
+                    wrapper.style.zIndex = '0';
                     loader.style.display = 'none';
-                    document.body.classList.remove('generating-pdf'); 
-                    showToast("Harika! PDF başarıyla dönüştürüldü.");
+                    showToast("PDF başarıyla indirildi!");
                 }).catch(err => {
-                    console.error("PDF Hatası:", err);
+                    console.error("PDF Hatası: ", err);
+                    wrapper.style.opacity = '0.01';
+                    wrapper.style.zIndex = '0';
                     loader.style.display = 'none';
-                    document.body.classList.remove('generating-pdf');
-                    showToast("PDF dönüştürülürken bir hata oluştu.");
+                    showToast("PDF oluşturulurken bir hata oluştu.");
                 });
-            }, 500);
+
+            }, 500); // 500ms bekleme süresi tarayıcının render edebilmesi için hayati önem taşır
         }
 
+        // Toast Mesaj Fonksiyonu
         function showToast(message) {
             const toast = document.getElementById("toast");
             toast.innerText = message;
             toast.className = "show";
-            setTimeout(function(){ 
-                toast.className = toast.className.replace("show", ""); 
-            }, 3000);
+            setTimeout(function(){ toast.className = toast.className.replace("show", ""); }, 3000);
         }
     </script>
 </body>
