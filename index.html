@@ -402,6 +402,24 @@
             const element = document.getElementById('pdf-root');
             const loader = document.getElementById('loader');
             
+            // --- DOSYA ADI DİNAMİKLEŞTİRME BAŞLANGICI ---
+            let pdfFilename = 'PDO_Vakasi'; // Varsayılan isim
+            
+            // İçerik güncellendikten sonra DOM'dan Başlık veya Alt Başlığı (Hastalık adı) alıyoruz
+            const docSubtitle = document.getElementById('t_doc_subtitle').innerText.trim();
+            const docTitle = document.getElementById('t_doc_title').innerText.trim();
+            
+            // Hastalık ismi genelde t_doc_subtitle'da olur. Yoksa docTitle'ı, o da yoksa varsayılanı kullanır.
+            if (docSubtitle.length > 0) {
+                pdfFilename = docSubtitle;
+            } else if (docTitle.length > 0) {
+                pdfFilename = docTitle;
+            }
+            
+            // Dosya isminde geçersiz olabilecek / ? < > \ : * | " gibi karakterleri silip boşlukları "_" (alt tire) yapar
+            pdfFilename = pdfFilename.replace(/[^a-zA-Z0-9ğüşıöçĞÜŞİÖÇ\s-]/g, '').trim().replace(/\s+/g, '_') + '.pdf';
+            // --- DOSYA ADI DİNAMİKLEŞTİRME BİTİŞİ ---
+
             // Yükleme ekranını göster (Arka planı tamamen siyah olduğu için PDF'in ekranda belirmesini gizler)
             loader.style.display = 'flex';
 
@@ -415,15 +433,9 @@
             const isMobile = window.innerWidth < 768;
             const pdfScale = isMobile ? 2 : 3;
 
-            // PDF ismini dinamik olarak ana başlıktan (hastalık isminden) alıyoruz
-            let pdfFileName = document.getElementById('t_doc_title').innerText.trim();
-            if (!pdfFileName) {
-                pdfFileName = 'PDO_Vakasi'; // Eğer başlık boşsa varsayılan isim
-            }
-
             const opt = {
                 margin:       0, 
-                filename:     pdfFileName + '.pdf',
+                filename:     pdfFilename, // Dinamik dosya adı buraya entegre edildi
                 image:        { type: 'jpeg', quality: 1.0 }, 
                 html2canvas:  { 
                     scale: pdfScale, 
