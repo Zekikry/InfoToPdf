@@ -216,8 +216,7 @@
         </div>
         
         <div class="flex-grow flex flex-col mb-6">
-            <label for="csv-input" class="text-sm font-semibold text-gray-700 mb-2">Veri Giriş Alanı (Anahtar|Değer)</label>
-            <textarea id="csv-input" class="w-full h-32 sm:h-64 p-4 border border-gray-300 rounded-lg font-mono text-xs sm:text-sm bg-gray-50 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none resize-y whitespace-pre shadow-inner" spellcheck="false" placeholder="Hazırladığınız verileri buraya yapıştırın..."></textarea>
+            <textarea id="csv-input" class="w-full h-32 sm:h-48 p-4 border border-gray-300 rounded-lg font-mono text-xs sm:text-sm bg-gray-50 text-gray-800 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none resize-y whitespace-pre shadow-inner" spellcheck="false" placeholder=""></textarea>
         </div>
         
         <button onclick="processAndDownloadPDF()" class="w-full bg-blue-700 hover:bg-blue-800 active:bg-blue-900 text-white font-bold py-4 px-6 rounded-lg transition duration-200 shadow-lg flex items-center justify-center gap-3 text-lg">
@@ -359,21 +358,42 @@
 
         function processAndDownloadPDF() {
             const text = document.getElementById('csv-input').value;
-            // İşletim sistemleri arası satır sonu farklılıklarını düzeltmek için Regex
-            const lines = text.split(/\r?\n/); 
             
-            // Gizli DOM üzerindeki ID'leri bul ve verileri güncelle
-            lines.forEach(line => {
-                if (!line.trim()) return; // Boş satırları atla
-                const separatorIndex = line.indexOf('|');
-                if (separatorIndex !== -1) {
-                    const key = line.substring(0, separatorIndex).trim();
-                    const value = line.substring(separatorIndex + 1).trim();
-                    
+            const tokens = [];
+            let currentToken = '';
+            let inQuotes = false;
+            
+            // Virgülle ayrılmış CSV formatını işleyen akıllı ayrıştırıcı (yan yana yazıma tam uygun)
+            for (let i = 0; i < text.length; i++) {
+                const char = text[i];
+                
+                if (char === '"') {
+                    if (inQuotes && text[i+1] === '"') {
+                        currentToken += '"'; // Kaçış karakteri olarak çift tırnak (metin içindeki tırnaklar için)
+                        i++;
+                    } else {
+                        inQuotes = !inQuotes;
+                    }
+                } else if (char === ',' && !inQuotes) {
+                    tokens.push(currentToken.trim());
+                    currentToken = '';
+                } else {
+                    currentToken += char;
+                }
+            }
+            tokens.push(currentToken.trim());
+            
+            // Gizli DOM üzerindeki ID'leri bul ve verileri güncelle (Anahtar ve Değer eşleştirmesi)
+            for (let i = 0; i < tokens.length; i += 2) {
+                const key = tokens[i];
+                // Eğer karşılık gelen bir değer yoksa boş bırak
+                const value = tokens[i + 1] !== undefined ? tokens[i + 1] : '';
+                
+                if (key) {
                     const el = document.getElementById('t_' + key);
                     if (el) { el.innerHTML = value; }
                 }
-            });
+            }
 
             generatePDF();
         }
@@ -395,9 +415,15 @@
             const isMobile = window.innerWidth < 768;
             const pdfScale = isMobile ? 2 : 3;
 
+            // PDF ismini dinamik olarak ana başlıktan (hastalık isminden) alıyoruz
+            let pdfFileName = document.getElementById('t_doc_title').innerText.trim();
+            if (!pdfFileName) {
+                pdfFileName = 'PDO_Vakasi'; // Eğer başlık boşsa varsayılan isim
+            }
+
             const opt = {
                 margin:       0, 
-                filename:     'PDO_Vakasi.pdf',
+                filename:     pdfFileName + '.pdf',
                 image:        { type: 'jpeg', quality: 1.0 }, 
                 html2canvas:  { 
                     scale: pdfScale, 
