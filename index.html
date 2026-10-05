@@ -402,24 +402,6 @@
             const element = document.getElementById('pdf-root');
             const loader = document.getElementById('loader');
             
-            // --- DOSYA ADI DİNAMİKLEŞTİRME BAŞLANGICI ---
-            let pdfFilename = 'PDO_Vakasi'; // Varsayılan isim
-            
-            // İçerik güncellendikten sonra DOM'dan Başlık veya Alt Başlığı (Hastalık adı) alıyoruz
-            const docSubtitle = document.getElementById('t_doc_subtitle').innerText.trim();
-            const docTitle = document.getElementById('t_doc_title').innerText.trim();
-            
-            // Hastalık ismi genelde t_doc_subtitle'da olur. Yoksa docTitle'ı, o da yoksa varsayılanı kullanır.
-            if (docSubtitle.length > 0) {
-                pdfFilename = docSubtitle;
-            } else if (docTitle.length > 0) {
-                pdfFilename = docTitle;
-            }
-            
-            // Dosya isminde geçersiz olabilecek / ? < > \ : * | " gibi karakterleri silip boşlukları "_" (alt tire) yapar
-            pdfFilename = pdfFilename.replace(/[^a-zA-Z0-9ğüşıöçĞÜŞİÖÇ\s-]/g, '').trim().replace(/\s+/g, '_') + '.pdf';
-            // --- DOSYA ADI DİNAMİKLEŞTİRME BİTİŞİ ---
-
             // Yükleme ekranını göster (Arka planı tamamen siyah olduğu için PDF'in ekranda belirmesini gizler)
             loader.style.display = 'flex';
 
@@ -435,7 +417,7 @@
 
             const opt = {
                 margin:       0, 
-                filename:     pdfFilename, // Dinamik dosya adı buraya entegre edildi
+                filename:     'PDO_Vakasi.pdf',
                 image:        { type: 'jpeg', quality: 1.0 }, 
                 html2canvas:  { 
                     scale: pdfScale, 
